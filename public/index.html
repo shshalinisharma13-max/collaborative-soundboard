@@ -2,84 +2,67 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <meta name="theme-color" content="#111111" />
-    <title>Collaborative Soundboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#a20d24" />
+    <meta name="description" content="A live audience soundboard controlled from your phone." />
+    <title>Hero Soundboard</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
+  <body class="audience-page">
+    <div class="web web-top" aria-hidden="true"></div>
+    <div class="web web-bottom" aria-hidden="true"></div>
+    <div id="reaction" class="reaction" aria-hidden="true">THWIP!</div>
 
-  <body>
-    <main class="app">
-      <header>
-        <p class="eyebrow">Tone.js + Socket.IO</p>
-        <h1>Collaborative Soundboard</h1>
-        <p class="intro">
-          Open the same room on several computers. A pad pressed by anyone
-          plays on every connected device.
-        </p>
+    <main class="app audience-app">
+      <header class="hero-header">
+        <p class="eyebrow">Live audience controls</p>
+        <h1>Hero<br /><span>Soundboard</span></h1>
+        <p class="intro">Tap a web badge. The sound plays from the host speaker—not your phone.</p>
       </header>
 
-      <section class="connection-panel" aria-label="Connection controls">
-        <label for="roomInput">Room code</label>
+      <section class="connection-panel" aria-label="Soundboard connection">
+        <label for="roomInput">Mission code</label>
         <div class="room-row">
-          <input
-            id="roomInput"
-            maxlength="30"
-            autocomplete="off"
-            spellcheck="false"
-            value="main"
-          />
-          <button id="startButton" class="start-button">Start audio & join</button>
+          <input id="roomInput" maxlength="30" autocomplete="off" spellcheck="false" value="main" />
+          <button id="joinButton" class="comic-button">Join mission</button>
         </div>
-
         <div class="status-row">
           <span id="connectionStatus" class="status">Connecting…</span>
-          <span><strong id="userCount">0</strong> connected</span>
+          <span class="hero-count"><strong id="userCount">0</strong> heroes online</span>
         </div>
-
-        <p class="share-line">
-          Share this room:
-          <button id="copyButton" class="text-button" disabled>Copy room link</button>
-        </p>
       </section>
 
-      <section id="padGrid" class="pad-grid" aria-label="Sound pads">
-        <button class="pad kick" data-pad="kick" disabled>
-          <span>Kick</span><small>C1</small>
+      <section id="padGrid" class="pad-grid" aria-label="Sound buttons">
+        <button class="pad background-pad" data-sound="sneaky-mischief" disabled>
+          <span class="pad-icon" aria-hidden="true">🕵️</span><span>Sneaky Mischief</span><small>Background · tap to toggle</small>
         </button>
-        <button class="pad snare" data-pad="snare" disabled>
-          <span>Snare</span><small>Noise</small>
+        <button class="pad" data-sound="romantic-moment" disabled>
+          <span class="pad-icon" aria-hidden="true">💘</span><span>Romantic Moment</span><small>One shot</small>
         </button>
-        <button class="pad hat" data-pad="hat" disabled>
-          <span>Hi-hat</span><small>Noise</small>
+        <button class="pad" data-sound="love-theme" disabled>
+          <span class="pad-icon" aria-hidden="true">❤️</span><span>Love Theme</span><small>One shot</small>
         </button>
-        <button class="pad bass" data-pad="bass" disabled>
-          <span>Bass</span><small>C2</small>
+        <button class="pad background-pad" data-sound="suspense" disabled>
+          <span class="pad-icon" aria-hidden="true">🔪</span><span>Suspense</span><small>Background · tap to toggle</small>
         </button>
-        <button class="pad chord" data-pad="chord" disabled>
-          <span>Chord</span><small>C minor 7</small>
+        <button class="pad" data-sound="rewind" disabled>
+          <span class="pad-icon" aria-hidden="true">⏪</span><span>Rewind</span><small>One shot</small>
         </button>
-        <button class="pad bell" data-pad="bell" disabled>
-          <span>Bell</span><small>G5</small>
+        <button class="pad" data-sound="bruh" disabled>
+          <span class="pad-icon" aria-hidden="true">😐</span><span>Bruh</span><small>One shot</small>
         </button>
-        <button class="pad pluck" data-pad="pluck" disabled>
-          <span>Pluck</span><small>Eb4</small>
+        <button class="pad" data-sound="well-be-right-back" disabled>
+          <span class="pad-icon" aria-hidden="true">📺</span><span>We’ll Be Right Back</span><small>One shot</small>
         </button>
-        <button class="pad pulse" data-pad="pulse" disabled>
-          <span>Pulse</span><small>G3</small>
+        <button class="pad" data-sound="faah" disabled>
+          <span class="pad-icon" aria-hidden="true">😱</span><span>Faah!</span><small>One shot</small>
         </button>
       </section>
 
-      <p id="message" class="message" role="status">
-        Press “Start audio & join” on every device.
-      </p>
+      <p id="message" class="message" role="status">Join the mission to activate your web shooters.</p>
     </main>
 
-    <script src="https://unpkg.com/tone@15.1.22/build/Tone.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/app.js"></script>
+    <script src="/audience.js"></script>
   </body>
 </html>

@@ -1,0 +1,34 @@
+COLLABORATIVE HERO SOUNDBOARD - UPDATE GUIDE
+
+This package contains the complete updated project code and all eight MP3 files.
+
+HOW TO UPDATE YOUR EXISTING DESKTOP FOLDER
+
+1. Stop the old server by clicking its PowerShell window and pressing Ctrl+C.
+2. Extract the ZIP file. It creates a folder named COLLABORATIVESOUNDBOARD1.
+3. Open that extracted folder and press Ctrl+A, then Ctrl+C.
+4. Open your existing folder:
+   C:\Users\Lenovo\OneDrive\Desktop\COLLABORATIVESOUNDBOARD1
+5. Press Ctrl+V.
+6. If Windows asks, choose "Replace the files in the destination."
+
+This method keeps the existing .git folder and GitHub connection in place.
+
+RUN THE UPDATED APP
+
+1. Open PowerShell in the existing Desktop project folder.
+2. Run: npm install
+3. Run: npm run dev
+4. Confirm the terminal says collaborative-hero-soundboard@2.0.0.
+5. On the host laptop, open:
+   http://localhost:3000/host?room=main
+6. Click "Arm sound system."
+7. Open the audience interface at:
+   http://localhost:3000/?room=main
+
+For audience phones on the same Wi-Fi, replace localhost with the host laptop's
+local IP address. For an internet audience, deploy the project using the
+instructions in README.md.
+
+If port 3000 is already in use, close any earlier soundboard PowerShell window
+with Ctrl+C, then run npm run dev again.

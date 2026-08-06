@@ -1,12 +1,14 @@
 {
-  "name": "collaborative-soundboard",
-  "version": "1.0.0",
+  "name": "collaborative-hero-soundboard",
+  "version": "2.0.0",
   "private": true,
-  "description": "A shared Tone.js soundboard using Socket.IO rooms.",
+  "type": "module",
+  "description": "A Socket.IO audience soundboard with host-only audio output.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "check": "node --check server.js && node --check public/audience.js && node --check public/host.js"
   },
   "engines": {
     "node": ">=20"

@@ -12,8 +12,10 @@ const io = new Server(httpServer);
 
 const PORT = globalThis.process?.env?.PORT || 3000;
 const SOUND_COOLDOWN_MS = 4000;
-const BACKGROUND_SOUNDS = new Set(["sneaky-mischief", "suspense"]);
+const BACKGROUND_SOUNDS = new Set();
 const ONE_SHOT_SOUNDS = new Set([
+  "sneaky-mischief",
+  "suspense",
   "romantic-moment",
   "love-theme",
   "rewind",

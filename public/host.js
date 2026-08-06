@@ -1,7 +1,7 @@
 const socket = io();
 
 const SOUND_NAMES = {
-  "sneaky-mischief": "Sneaky Mischief",
+  "sneaky-mischief": "Sad Piano",
   "romantic-moment": "Romantic Moment",
   "love-theme": "Love Theme",
   suspense: "Suspense",
@@ -57,7 +57,7 @@ function createAudioPlayers() {
     Object.entries(AUDIO_FILES).map(([sound, source]) => {
       const audio = new Audio(source);
       audio.preload = "auto";
-      audio.loop = sound === "sneaky-mischief" || sound === "suspense";
+      audio.loop = false;
       return [sound, audio];
     }),
   );
@@ -89,9 +89,8 @@ async function playOneShot(sound) {
 }
 
 async function setBackground(sound) {
-  ["sneaky-mischief", "suspense"].forEach((name) => {
-    const player = audioPlayers[name];
-    if (name !== sound && player) {
+  Object.entries(audioPlayers).forEach(([name, player]) => {
+    if (name !== sound && player.loop) {
       player.pause();
       player.currentTime = 0;
     }

@@ -3,15 +3,30 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { scryptSync, timingSafeEqual } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
-
 const PORT = globalThis.process?.env?.PORT || 3000;
+
 const SOUND_COOLDOWN_MS = 4000;
+const SECRET_EFFECT_COOLDOWN_MS = 1000;
+const SECRET_EFFECT_MAX_STAGGER_MS = 500;
+
+// Fixed show password without a Render environment variable.
+// Only a slow scrypt hash is stored in the source; the plaintext password is
+// not present in the deployed code.
+const HOST_EFFECT_KEY_SALT = "collab-soundboard-v2";
+const HOST_EFFECT_KEY_HASH = "b72c2d527720149c106274db164f3afcc52e6b1e9157bcef8df6103be307b1af";
+
+function secretEffectKeyMatches(providedKey) {
+  const candidate = scryptSync(String(providedKey || ""), HOST_EFFECT_KEY_SALT, 32);
+  const expected = Buffer.from(HOST_EFFECT_KEY_HASH, "hex");
+  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+}
+
 const BACKGROUND_SOUNDS = new Set();
 const ONE_SHOT_SOUNDS = new Set([
   "sneaky-mischief",
@@ -23,10 +38,12 @@ const ONE_SHOT_SOUNDS = new Set([
   "well-be-right-back",
   "faah",
 ]);
+
 const ALLOWED_SOUNDS = new Set([...BACKGROUND_SOUNDS, ...ONE_SHOT_SOUNDS]);
 const rooms = new Map();
 
 app.use(express.static(path.join(__dirname, "public")));
+
 app.get("/host", (_request, response) => {
   response.sendFile(path.join(__dirname, "public", "host.html"));
 });
@@ -37,7 +54,6 @@ function cleanRoomName(value) {
     .toLowerCase()
     .replace(/[^a-z0-9-_]/g, "")
     .slice(0, 30);
-
   return room || "main";
 }
 
@@ -47,9 +63,9 @@ function getRoomState(room) {
       locked: false,
       activeBackground: null,
       cooldownUntil: 0,
+      secretEffectCooldownUntil: 0,
     });
   }
-
   return rooms.get(room);
 }
 
@@ -63,7 +79,6 @@ function socketsInRoom(room) {
 function roomSnapshot(room) {
   const members = socketsInRoom(room);
   const state = getRoomState(room);
-
   return {
     room,
     heroesOnline: members.filter((member) => member.data.role === "audience").length,
@@ -84,6 +99,12 @@ function sendToHosts(room, eventName, payload) {
     .forEach((host) => host.emit(eventName, payload));
 }
 
+function sendToAudience(room, eventName, payload) {
+  socketsInRoom(room)
+    .filter((member) => member.data.role === "audience")
+    .forEach((audience) => audience.emit(eventName, payload));
+}
+
 function leaveCurrentRoom(socket) {
   const oldRoom = socket.data.room;
   if (!oldRoom) return;
@@ -91,6 +112,7 @@ function leaveCurrentRoom(socket) {
   socket.leave(oldRoom);
   socket.data.room = null;
   socket.data.role = null;
+  socket.data.secretEffectUnlocked = false;
   broadcastState(oldRoom);
 }
 
@@ -101,11 +123,14 @@ function joinRoom(socket, requestedRoom, role) {
   socket.join(room);
   socket.data.room = room;
   socket.data.role = role;
+  socket.data.secretEffectUnlocked = false;
   socket.emit("room-joined", roomSnapshot(room));
   broadcastState(room);
 }
 
 io.on("connection", (socket) => {
+  socket.data.secretEffectUnlocked = false;
+
   socket.on("join-audience", (requestedRoom) => {
     joinRoom(socket, requestedRoom, "audience");
   });
@@ -115,6 +140,83 @@ io.on("connection", (socket) => {
     socket.emit("background-state", {
       activeBackground: getRoomState(socket.data.room).activeBackground,
     });
+  });
+
+  socket.on("unlock-secret-effect", (providedKey, acknowledge = () => {}) => {
+    const room = socket.data.room;
+    if (!room || socket.data.role !== "host") {
+      acknowledge({ ok: false, reason: "host-required" });
+      return;
+    }
+
+    if (!secretEffectKeyMatches(providedKey)) {
+      socket.data.secretEffectUnlocked = false;
+      acknowledge({ ok: false, reason: "wrong-key" });
+      return;
+    }
+
+    socket.data.secretEffectUnlocked = true;
+    acknowledge({ ok: true });
+  });
+
+  socket.on("trigger-secret-audience-effect", (_payload, acknowledge = () => {}) => {
+    const room = socket.data.room;
+    if (!room || socket.data.role !== "host" || !socket.data.secretEffectUnlocked) {
+      acknowledge({ ok: false, reason: "not-authorized" });
+      return;
+    }
+
+    const state = getRoomState(room);
+    const now = Date.now();
+    if (state.secretEffectCooldownUntil > now) {
+      acknowledge({
+        ok: false,
+        reason: "cooldown",
+        remainingMs: state.secretEffectCooldownUntil - now,
+      });
+      return;
+    }
+
+    state.secretEffectCooldownUntil = now + SECRET_EFFECT_COOLDOWN_MS;
+
+    const audienceSockets = socketsInRoom(room).filter((member) => member.data.role === "audience");
+    const cueId = `${now}-${Math.random().toString(36).slice(2, 8)}`;
+
+    audienceSockets.forEach((audience) => {
+      const delayMs = Math.floor(Math.random() * (SECRET_EFFECT_MAX_STAGGER_MS + 1));
+      audience.emit("play-secret-audience-effect", {
+        sound: "dhongibabaaudience",
+        sentAt: now,
+        cueId,
+        delayMs,
+      });
+    });
+
+    acknowledge({
+      ok: true,
+      audienceCount: audienceSockets.length,
+      maxStaggerMs: SECRET_EFFECT_MAX_STAGGER_MS,
+    });
+  });
+
+  socket.on("disarm-host", (_payload, acknowledge = () => {}) => {
+    const room = socket.data.room;
+    if (!room || socket.data.role !== "host") {
+      acknowledge({ ok: false, reason: "host-required" });
+      return;
+    }
+
+    const state = getRoomState(room);
+    state.activeBackground = null;
+    state.locked = false;
+    state.secretEffectCooldownUntil = 0;
+
+    // Cancel both already-playing and not-yet-started staggered phone cues.
+    sendToAudience(room, "stop-secret-audience-effect", { sentAt: Date.now() });
+    sendToHosts(room, "background-state", { activeBackground: null });
+
+    leaveCurrentRoom(socket);
+    acknowledge({ ok: true });
   });
 
   socket.on("set-lock", (shouldLock) => {
@@ -132,6 +234,7 @@ io.on("connection", (socket) => {
     const state = getRoomState(room);
     state.activeBackground = null;
     sendToHosts(room, "background-state", { activeBackground: null });
+
     io.to(room).emit("sound-accepted", {
       sound: null,
       kind: "background",
@@ -177,6 +280,7 @@ io.on("connection", (socket) => {
         requestedSound: sound,
         sentAt: now,
       };
+
       sendToHosts(room, "background-state", event);
       io.to(room).emit("sound-accepted", {
         sound,
@@ -196,8 +300,16 @@ io.on("connection", (socket) => {
       ...event,
       reaction: ["POW!", "BAM!", "THWIP!"][Math.floor(Math.random() * 3)],
     });
+
     broadcastState(room);
     acknowledge({ ok: true, cooldownUntil: state.cooldownUntil });
+  });
+
+  socket.on("disconnecting", () => {
+    const room = socket.data.room;
+    if (room && socket.data.role === "host") {
+      sendToAudience(room, "stop-secret-audience-effect", { sentAt: Date.now() });
+    }
   });
 
   socket.on("disconnect", () => {

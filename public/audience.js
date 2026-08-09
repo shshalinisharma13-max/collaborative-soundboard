@@ -12,6 +12,16 @@ let joinedRoom = "";
 let roomState = { locked: false, hostOnline: false, activeBackground: null, cooldownUntil: 0 };
 let cooldownTimer = null;
 
+// Reuse ONE audio element. On iOS/Safari, unlocking the same element during
+// the user's Join Mission tap makes later Socket.IO-triggered playback much
+// more reliable than creating a fresh Audio() at cue time.
+const secretAudienceEffect = new Audio("/sounds/dhongibabaaudience.mp3");
+secretAudienceEffect.preload = "auto";
+secretAudienceEffect.loop = false;
+secretAudienceEffect.playsInline = true;
+let secretAudioUnlocked = false;
+let secretEffectTimer = null;
+
 const roomFromUrl = new URLSearchParams(window.location.search).get("room");
 if (roomFromUrl) roomInput.value = roomFromUrl;
 
@@ -32,6 +42,7 @@ function roomUrl(pathname, room) {
 function updateControls() {
   const enabled = Boolean(joinedRoom && socket.connected && roomState.hostOnline && !roomState.locked);
   const coolingDown = (roomState.cooldownUntil || 0) > Date.now();
+
   pads.forEach((pad) => {
     pad.disabled = !enabled || coolingDown;
     pad.classList.toggle("cooling-down", coolingDown);
@@ -40,6 +51,7 @@ function updateControls() {
   });
 
   document.body.classList.toggle("shooters-locked", roomState.locked);
+
   if (!joinedRoom) {
     message.textContent = "Join the mission to activate your web shooters.";
   } else if (!roomState.hostOnline) {
@@ -62,13 +74,60 @@ function showReaction(word, button) {
     reaction.style.left = `${Math.min(window.innerWidth - 100, Math.max(12, rect.left + rect.width / 2 - 55))}px`;
     reaction.style.top = `${Math.max(70, rect.top - 30)}px`;
   }
+
   reaction.textContent = word;
   reaction.classList.remove("burst");
   void reaction.offsetWidth;
   reaction.classList.add("burst");
 }
 
-function joinRoom() {
+async function unlockSecretAudienceAudio() {
+  if (secretAudioUnlocked) return true;
+
+  try {
+    secretAudienceEffect.volume = 0;
+    secretAudienceEffect.currentTime = 0;
+    await secretAudienceEffect.play();
+    secretAudienceEffect.pause();
+    secretAudienceEffect.currentTime = 0;
+    secretAudienceEffect.volume = 1;
+    secretAudioUnlocked = true;
+    return true;
+  } catch (error) {
+    console.warn("Audience-phone audio could not be pre-unlocked.", error);
+    secretAudienceEffect.volume = 1;
+    return false;
+  }
+}
+
+function stopSecretAudienceEffect() {
+  window.clearTimeout(secretEffectTimer);
+  secretEffectTimer = null;
+  secretAudienceEffect.pause();
+  secretAudienceEffect.currentTime = 0;
+}
+
+function scheduleSecretAudienceEffect(delayMs = 0) {
+  stopSecretAudienceEffect();
+
+  const safeDelay = Math.max(0, Math.min(500, Number(delayMs) || 0));
+  secretEffectTimer = window.setTimeout(async () => {
+    secretEffectTimer = null;
+    try {
+      secretAudienceEffect.currentTime = 0;
+      secretAudienceEffect.volume = 1;
+      await secretAudienceEffect.play();
+    } catch (error) {
+      console.warn("The special audience-phone effect was blocked on this device.", error);
+    }
+  }, safeDelay);
+}
+
+async function joinRoom() {
+  // This happens directly inside the user's tap, which is the best moment to
+  // satisfy mobile-browser audio/autoplay restrictions.
+  await unlockSecretAudienceAudio();
+
   joinedRoom = cleanRoomName(roomInput.value);
   roomInput.value = joinedRoom;
   roomInput.disabled = true;
@@ -85,7 +144,6 @@ function scheduleCooldownEnd() {
 
   const remainingMs = (roomState.cooldownUntil || 0) - Date.now();
   if (remainingMs <= 0) return;
-
   cooldownTimer = window.setTimeout(updateControls, remainingMs + 25);
 }
 
@@ -139,4 +197,12 @@ socket.on("room-state", (state) => {
 socket.on("sound-accepted", (event) => {
   const button = event.sound ? document.querySelector(`[data-sound="${event.sound}"]`) : null;
   showReaction(event.reaction || "THWIP!", button);
+});
+
+socket.on("play-secret-audience-effect", ({ delayMs = 0 } = {}) => {
+  scheduleSecretAudienceEffect(delayMs);
+});
+
+socket.on("stop-secret-audience-effect", () => {
+  stopSecretAudienceEffect();
 });

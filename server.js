@@ -37,6 +37,11 @@ const ONE_SHOT_SOUNDS = new Set([
   "bruh",
   "well-be-right-back",
   "faah",
+  "dexter-meme",
+  "vine-boom",
+  "among-us-role-reveal",
+  "modi-ji-bkl",
+  "oh-my-god",
 ]);
 
 const ALLOWED_SOUNDS = new Set([...BACKGROUND_SOUNDS, ...ONE_SHOT_SOUNDS]);

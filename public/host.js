@@ -9,6 +9,11 @@ const SOUND_NAMES = {
   bruh: "Bruh",
   "well-be-right-back": "We’ll Be Right Back",
   faah: "Faah!",
+  "dexter-meme": "Dexter",
+  "vine-boom": "Vine Boom",
+  "among-us-role-reveal": "Among Us Role Reveal",
+  "modi-ji-bkl": "Modi Ji BKL",
+  "oh-my-god": "Oh My God",
 };
 
 const AUDIO_FILES = Object.fromEntries(

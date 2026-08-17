@@ -9,7 +9,14 @@ const reaction = document.querySelector("#reaction");
 const pads = [...document.querySelectorAll(".pad")];
 
 let joinedRoom = "";
-let roomState = { locked: false, hostOnline: false, activeBackground: null, cooldownUntil: 0 };
+let roomState = {
+  locked: false,
+  hostOnline: false,
+  activeBackground: null,
+  cooldownUntil: 0,
+  cooldownSound: null,
+  cooldownDurationMs: 0,
+};
 let cooldownTimer = null;
 
 // Reuse ONE audio element. On iOS/Safari, unlocking the same element during
@@ -59,7 +66,9 @@ function updateControls() {
   } else if (roomState.locked) {
     message.textContent = "Web shooters disabled by the host.";
   } else if (coolingDown) {
-    message.textContent = "Soundboard recharging - all sounds unlock in four seconds.";
+    const seconds = Math.max(1, Math.round((roomState.cooldownDurationMs || 4000) / 1000));
+    const soundName = roomState.cooldownSound === "punch" ? "Punch" : "Soundboard";
+    message.textContent = `${soundName} recharging - all sounds unlock in ${seconds} second${seconds === 1 ? "" : "s"}.`;
   } else if (roomState.activeBackground) {
     const active = document.querySelector(`[data-sound="${roomState.activeBackground}"] span:nth-of-type(2)`)?.textContent;
     message.textContent = `${active || "Background track"} is playing. Tap it again to stop.`;

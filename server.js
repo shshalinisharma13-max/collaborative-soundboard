@@ -12,6 +12,7 @@ const io = new Server(httpServer);
 const PORT = globalThis.process?.env?.PORT || 3000;
 
 const SOUND_COOLDOWN_MS = 4000;
+const PUNCH_COOLDOWN_MS = 1000;
 const SECRET_EFFECT_COOLDOWN_MS = 1000;
 const SECRET_EFFECT_MAX_STAGGER_MS = 500;
 
@@ -29,19 +30,10 @@ function secretEffectKeyMatches(providedKey) {
 
 const BACKGROUND_SOUNDS = new Set();
 const ONE_SHOT_SOUNDS = new Set([
-  "sneaky-mischief",
-  "suspense",
-  "romantic-moment",
-  "love-theme",
-  "rewind",
+  "punch",
   "bruh",
-  "well-be-right-back",
   "faah",
-  "dexter-meme",
-  "vine-boom",
-  "among-us-role-reveal",
   "modi-ji-bkl",
-  "oh-my-god",
 ]);
 
 const ALLOWED_SOUNDS = new Set([...BACKGROUND_SOUNDS, ...ONE_SHOT_SOUNDS]);
@@ -68,6 +60,8 @@ function getRoomState(room) {
       locked: false,
       activeBackground: null,
       cooldownUntil: 0,
+      cooldownSound: null,
+      cooldownDurationMs: 0,
       secretEffectCooldownUntil: 0,
     });
   }
@@ -91,6 +85,8 @@ function roomSnapshot(room) {
     locked: state.locked,
     activeBackground: state.activeBackground,
     cooldownUntil: state.cooldownUntil,
+    cooldownSound: state.cooldownSound,
+    cooldownDurationMs: state.cooldownDurationMs,
   };
 }
 
@@ -276,7 +272,10 @@ io.on("connection", (socket) => {
       return;
     }
 
-    state.cooldownUntil = now + SOUND_COOLDOWN_MS;
+    const cooldownDurationMs = sound === "punch" ? PUNCH_COOLDOWN_MS : SOUND_COOLDOWN_MS;
+    state.cooldownUntil = now + cooldownDurationMs;
+    state.cooldownSound = sound;
+    state.cooldownDurationMs = cooldownDurationMs;
 
     if (BACKGROUND_SOUNDS.has(sound)) {
       state.activeBackground = state.activeBackground === sound ? null : sound;

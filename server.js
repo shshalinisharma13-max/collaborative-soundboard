@@ -13,6 +13,7 @@ const PORT = globalThis.process?.env?.PORT || 3000;
 
 const SOUND_COOLDOWN_MS = 4000;
 const PUNCH_COOLDOWN_MS = 1000;
+const BATTLE_COOLDOWN_MS = 1000;
 const SECRET_EFFECT_COOLDOWN_MS = 1000;
 const SECRET_EFFECT_MAX_STAGGER_MS = 500;
 
@@ -34,7 +35,13 @@ const ONE_SHOT_SOUNDS = new Set([
   "bruh",
   "faah",
   "modi-ji-bkl",
+  "kick",
+  "slap",
+  "kamehameha",
 ]);
+
+const BATTLE_SOUNDS = new Set(["kick", "slap", "punch", "kamehameha"]);
+const BATTLE_TURNS = new Set(["spider-man", "spider-woman"]);
 
 const ALLOWED_SOUNDS = new Set([...BACKGROUND_SOUNDS, ...ONE_SHOT_SOUNDS]);
 const rooms = new Map();
@@ -63,6 +70,10 @@ function getRoomState(room) {
       cooldownSound: null,
       cooldownDurationMs: 0,
       secretEffectCooldownUntil: 0,
+      battleMode: false,
+      battleTurn: null,
+      kamehamehaUnlocked: false,
+      battleEnded: false,
     });
   }
   return rooms.get(room);
@@ -87,6 +98,10 @@ function roomSnapshot(room) {
     cooldownUntil: state.cooldownUntil,
     cooldownSound: state.cooldownSound,
     cooldownDurationMs: state.cooldownDurationMs,
+    battleMode: state.battleMode,
+    battleTurn: state.battleTurn,
+    kamehamehaUnlocked: state.kamehamehaUnlocked,
+    battleEnded: state.battleEnded,
   };
 }
 
@@ -211,6 +226,13 @@ io.on("connection", (socket) => {
     state.activeBackground = null;
     state.locked = false;
     state.secretEffectCooldownUntil = 0;
+    state.battleMode = false;
+    state.battleTurn = null;
+    state.kamehamehaUnlocked = false;
+    state.battleEnded = false;
+    state.cooldownUntil = 0;
+    state.cooldownSound = null;
+    state.cooldownDurationMs = 0;
 
     // Cancel both already-playing and not-yet-started staggered phone cues.
     sendToAudience(room, "stop-secret-audience-effect", { sentAt: Date.now() });
@@ -226,6 +248,62 @@ io.on("connection", (socket) => {
 
     getRoomState(room).locked = Boolean(shouldLock);
     broadcastState(room);
+  });
+
+  socket.on("set-battle-mode", (shouldStart, acknowledge = () => {}) => {
+    const room = socket.data.room;
+    if (!room || socket.data.role !== "host") {
+      acknowledge({ ok: false, reason: "host-required" });
+      return;
+    }
+
+    const state = getRoomState(room);
+    state.battleMode = Boolean(shouldStart);
+    state.battleTurn = state.battleMode ? "spider-man" : null;
+    state.kamehamehaUnlocked = false;
+    state.battleEnded = false;
+    state.cooldownUntil = 0;
+    state.cooldownSound = null;
+    state.cooldownDurationMs = 0;
+    broadcastState(room);
+    acknowledge({ ok: true, battleMode: state.battleMode, battleTurn: state.battleTurn });
+  });
+
+  socket.on("set-battle-turn", (requestedTurn, acknowledge = () => {}) => {
+    const room = socket.data.room;
+    if (!room || socket.data.role !== "host") {
+      acknowledge({ ok: false, reason: "host-required" });
+      return;
+    }
+
+    const state = getRoomState(room);
+    const battleTurn = String(requestedTurn || "");
+    if (!state.battleMode || state.battleEnded || !BATTLE_TURNS.has(battleTurn)) {
+      acknowledge({ ok: false, reason: "battle-not-active" });
+      return;
+    }
+
+    state.battleTurn = battleTurn;
+    broadcastState(room);
+    acknowledge({ ok: true, battleTurn });
+  });
+
+  socket.on("unlock-kamehameha", (_payload, acknowledge = () => {}) => {
+    const room = socket.data.room;
+    if (!room || socket.data.role !== "host") {
+      acknowledge({ ok: false, reason: "host-required" });
+      return;
+    }
+
+    const state = getRoomState(room);
+    if (!state.battleMode || state.battleEnded) {
+      acknowledge({ ok: false, reason: "battle-not-active" });
+      return;
+    }
+
+    state.kamehamehaUnlocked = true;
+    broadcastState(room);
+    acknowledge({ ok: true });
   });
 
   socket.on("stop-background", () => {
@@ -260,6 +338,21 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (state.battleMode) {
+      if (state.battleEnded || !BATTLE_SOUNDS.has(sound)) {
+        acknowledge({ ok: false, reason: "battle-unavailable" });
+        return;
+      }
+
+      if (sound === "kamehameha" && !state.kamehamehaUnlocked) {
+        acknowledge({ ok: false, reason: "kamehameha-locked" });
+        return;
+      }
+    } else if (BATTLE_SOUNDS.has(sound) && sound !== "punch") {
+      acknowledge({ ok: false, reason: "battle-only" });
+      return;
+    }
+
     if (!roomSnapshot(room).hostOnline) {
       acknowledge({ ok: false, reason: "no-host" });
       return;
@@ -272,7 +365,9 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const cooldownDurationMs = sound === "punch" ? PUNCH_COOLDOWN_MS : SOUND_COOLDOWN_MS;
+    const cooldownDurationMs = state.battleMode
+      ? BATTLE_COOLDOWN_MS
+      : sound === "punch" ? PUNCH_COOLDOWN_MS : SOUND_COOLDOWN_MS;
     state.cooldownUntil = now + cooldownDurationMs;
     state.cooldownSound = sound;
     state.cooldownDurationMs = cooldownDurationMs;
@@ -298,15 +393,28 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const event = { sound, kind: "one-shot", sentAt: now };
+    const event = {
+      sound,
+      kind: "one-shot",
+      sentAt: now,
+      battleTurn: state.battleMode ? state.battleTurn : null,
+    };
     sendToHosts(room, "play-one-shot", event);
     io.to(room).emit("sound-accepted", {
       ...event,
       reaction: ["POW!", "BAM!", "THWIP!"][Math.floor(Math.random() * 3)],
     });
 
+    if (state.battleMode && sound === "kamehameha") {
+      state.battleEnded = true;
+    }
+
     broadcastState(room);
-    acknowledge({ ok: true, cooldownUntil: state.cooldownUntil });
+    acknowledge({
+      ok: true,
+      cooldownUntil: state.cooldownUntil,
+      battleEnded: state.battleEnded,
+    });
   });
 
   socket.on("disconnecting", () => {

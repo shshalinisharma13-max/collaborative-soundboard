@@ -5,6 +5,9 @@ const SOUND_NAMES = {
   bruh: "Bruh",
   faah: "Faah!",
   "modi-ji-bkl": "Modi Ji BKL",
+  kick: "Kick",
+  slap: "Slap",
+  kamehameha: "Kamehameha",
 };
 
 const AUDIO_FILES = Object.fromEntries(
@@ -29,6 +32,11 @@ const secretKeyInput = document.querySelector("#secretKeyInput");
 const unlockSecretButton = document.querySelector("#unlockSecretButton");
 const secretEffectButton = document.querySelector("#secretEffectButton");
 const secretEffectStatus = document.querySelector("#secretEffectStatus");
+const battleModeButton = document.querySelector("#battleModeButton");
+const nextTurnButton = document.querySelector("#nextTurnButton");
+const unlockKamehamehaButton = document.querySelector("#unlockKamehamehaButton");
+const battleStatus = document.querySelector("#battleStatus");
+const battleHelp = document.querySelector("#battleHelp");
 
 let armed = false;
 let joinedRoom = "";
@@ -37,6 +45,10 @@ let activeBackground = null;
 let audioPlayers = {};
 let secretEffectUnlocked = false;
 let secretEffectBusy = false;
+let battleMode = false;
+let battleTurn = null;
+let kamehamehaUnlocked = false;
+let battleEnded = false;
 
 const roomFromUrl = new URLSearchParams(window.location.search).get("room");
 if (roomFromUrl) roomInput.value = roomFromUrl;
@@ -86,7 +98,8 @@ async function playOneShot(sound) {
   try {
     player.currentTime = 0;
     await player.play();
-    logActivity(`${SOUND_NAMES[sound]} fired`);
+    const turnName = battleTurn === "spider-woman" ? "Spider-Woman" : "Spider-Man";
+    logActivity(`${SOUND_NAMES[sound]} fired${battleMode ? ` for ${turnName}` : ""}`);
   } catch (error) {
     console.error(error);
     message.textContent = "The browser blocked playback. Click the page, then arm the sound system again.";
@@ -143,14 +156,48 @@ function updateSecretEffectUi() {
   }
 }
 
+function updateBattleUi() {
+  const turnName = battleTurn === "spider-woman" ? "Spider-Woman" : "Spider-Man";
+  battleModeButton.disabled = !armed;
+  battleModeButton.textContent = battleMode ? "End / Reset Battle" : "Start Battle";
+  battleModeButton.classList.toggle("danger", battleMode);
+  nextTurnButton.disabled = !armed || !battleMode || battleEnded;
+  nextTurnButton.textContent = battleTurn === "spider-woman"
+    ? "Switch to Spider-Man"
+    : "Switch to Spider-Woman";
+  unlockKamehamehaButton.disabled = !armed || !battleMode || kamehamehaUnlocked || battleEnded;
+  unlockKamehamehaButton.textContent = kamehamehaUnlocked ? "Kamehameha Unlocked" : "Unlock Kamehameha";
+  unlockKamehamehaButton.classList.toggle("unlocked", kamehamehaUnlocked);
+
+  if (!battleMode) {
+    battleStatus.textContent = "Battle mode is off";
+    battleHelp.textContent = "Start the battle to show Kick, Slap, and Punch on audience phones.";
+  } else if (battleEnded) {
+    battleStatus.textContent = "Battle finished - Kamehameha landed!";
+    battleHelp.textContent = "End / Reset Battle when you are ready to return to the soundboard.";
+  } else {
+    battleStatus.textContent = `${turnName}'s turn`;
+    battleHelp.textContent = kamehamehaUnlocked
+      ? "The final Kamehameha attack is unlocked on audience phones."
+      : "Kick, Slap, and Punch are live with a shared one-second cooldown.";
+  }
+}
+
 async function armHost() {
   audioPlayers = createAudioPlayers();
 
-  try {
-    await Promise.all(Object.values(audioPlayers).map((audio) => audio.load()));
-  } catch {
-    // Browsers may not resolve load(); playback remains available after the click.
-  }
+  // Prime every player during this host click so later audience-triggered
+  // playback is allowed by autoplay-restricted browsers.
+  await Promise.allSettled(Object.values(audioPlayers).map(async (audio) => {
+    audio.volume = 0;
+    try {
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+    } finally {
+      audio.volume = 1;
+    }
+  }));
 
   armed = true;
   joinedRoom = cleanRoomName(roomInput.value);
@@ -167,6 +214,7 @@ async function armHost() {
   window.history.replaceState({}, "", roomUrl("/host", joinedRoom));
   socket.emit("register-host", joinedRoom);
   updateSecretEffectUi();
+  updateBattleUi();
 }
 
 function stopAllHostAudio() {
@@ -187,6 +235,10 @@ function disarmHost() {
   secretEffectUnlocked = false;
   secretEffectBusy = false;
   locked = false;
+  battleMode = false;
+  battleTurn = null;
+  kamehamehaUnlocked = false;
+  battleEnded = false;
   audioPlayers = {};
 
   roomInput.disabled = false;
@@ -202,6 +254,7 @@ function disarmHost() {
 
   updateLockUi();
   updateSecretEffectUi();
+  updateBattleUi();
   logActivity("Sound system disarmed · audience-phone cue stopped");
 }
 
@@ -269,6 +322,26 @@ secretKeyInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") unlockSecretEffect();
 });
 secretEffectButton.addEventListener("click", triggerSecretEffect);
+battleModeButton.addEventListener("click", () => {
+  if (!armed) return;
+  socket.emit("set-battle-mode", !battleMode, (response) => {
+    if (!response?.ok) return;
+    logActivity(response.battleMode ? "Battle mode started - Spider-Man's turn" : "Battle mode ended and reset");
+  });
+});
+nextTurnButton.addEventListener("click", () => {
+  if (!battleMode || battleEnded) return;
+  const nextTurn = battleTurn === "spider-woman" ? "spider-man" : "spider-woman";
+  socket.emit("set-battle-turn", nextTurn, (response) => {
+    if (response?.ok) logActivity(`Turn switched to ${nextTurn === "spider-woman" ? "Spider-Woman" : "Spider-Man"}`);
+  });
+});
+unlockKamehamehaButton.addEventListener("click", () => {
+  if (!battleMode || battleEnded || kamehamehaUnlocked) return;
+  socket.emit("unlock-kamehameha", {}, (response) => {
+    if (response?.ok) logActivity("Kamehameha finale unlocked for the audience");
+  });
+});
 
 copyButton.addEventListener("click", async () => {
   const link = roomUrl("/", joinedRoom || cleanRoomName(roomInput.value));
@@ -304,7 +377,12 @@ socket.on("disconnect", () => {
 socket.on("room-state", (state) => {
   userCount.textContent = String(state.heroesOnline);
   locked = state.locked;
+  battleMode = Boolean(state.battleMode);
+  battleTurn = state.battleTurn;
+  kamehamehaUnlocked = Boolean(state.kamehamehaUnlocked);
+  battleEnded = Boolean(state.battleEnded);
   updateLockUi();
+  updateBattleUi();
 });
 
 socket.on("play-one-shot", ({ sound }) => playOneShot(sound));
@@ -313,3 +391,4 @@ socket.on("background-state", ({ activeBackground: sound }) => {
 });
 
 updateSecretEffectUi();
+updateBattleUi();

@@ -32,7 +32,7 @@
         </div>
       </section>
 
-      <section id="padGrid" class="pad-grid" aria-label="Sound buttons">
+      <section id="standardPadGrid" class="pad-grid" aria-label="Sound buttons">
         <button class="pad" data-sound="punch" disabled>
           <span class="pad-icon" aria-hidden="true">👊</span><span>Punch</span><small>1 sec cooldown</small>
         </button>
@@ -45,6 +45,28 @@
         <button class="pad" data-sound="modi-ji-bkl" disabled>
           <span class="pad-icon" aria-hidden="true">🎙️</span><span>Modi Ji BKL</span><small>One shot</small>
         </button>
+      </section>
+
+      <section id="battlePanel" class="battle-panel" aria-label="Battle mode controls" hidden>
+        <div class="battle-banner">
+          <p class="card-label">Battle mode</p>
+          <h2 id="battleTurn">Spider-Man's turn</h2>
+          <p id="battleInstruction">Audience, choose the attack!</p>
+        </div>
+        <div class="pad-grid battle-grid">
+          <button class="pad battle-pad" data-sound="kick" disabled>
+            <span class="pad-icon" aria-hidden="true">&#129406;</span><span>Kick</span><small>1 sec cooldown</small>
+          </button>
+          <button class="pad battle-pad" data-sound="slap" disabled>
+            <span class="pad-icon" aria-hidden="true">&#9995;</span><span>Slap</span><small>1 sec cooldown</small>
+          </button>
+          <button class="pad battle-pad" data-sound="punch" disabled>
+            <span class="pad-icon" aria-hidden="true">&#128074;</span><span>Punch</span><small>1 sec cooldown</small>
+          </button>
+          <button class="pad battle-pad finale-pad" data-sound="kamehameha" disabled>
+            <span class="pad-icon" aria-hidden="true">&#128165;</span><span>Kamehameha</span><small id="kamehamehaLabel">Locked by host</small>
+          </button>
+        </div>
       </section>
 
       <p id="message" class="message" role="status">Join the mission to activate your web shooters.</p>

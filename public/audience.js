@@ -7,6 +7,11 @@ const userCount = document.querySelector("#userCount");
 const message = document.querySelector("#message");
 const reaction = document.querySelector("#reaction");
 const pads = [...document.querySelectorAll(".pad")];
+const standardPadGrid = document.querySelector("#standardPadGrid");
+const battlePanel = document.querySelector("#battlePanel");
+const battleTurn = document.querySelector("#battleTurn");
+const battleInstruction = document.querySelector("#battleInstruction");
+const kamehamehaLabel = document.querySelector("#kamehamehaLabel");
 
 let joinedRoom = "";
 let roomState = {
@@ -16,6 +21,10 @@ let roomState = {
   cooldownUntil: 0,
   cooldownSound: null,
   cooldownDurationMs: 0,
+  battleMode: false,
+  battleTurn: null,
+  kamehamehaUnlocked: false,
+  battleEnded: false,
 };
 let cooldownTimer = null;
 
@@ -49,10 +58,26 @@ function roomUrl(pathname, room) {
 function updateControls() {
   const enabled = Boolean(joinedRoom && socket.connected && roomState.hostOnline && !roomState.locked);
   const coolingDown = (roomState.cooldownUntil || 0) > Date.now();
+  const inBattle = Boolean(roomState.battleMode);
+  const turnName = roomState.battleTurn === "spider-woman" ? "Spider-Woman" : "Spider-Man";
+
+  standardPadGrid.hidden = inBattle;
+  battlePanel.hidden = !inBattle;
+  battlePanel.classList.toggle("battle-ended", Boolean(roomState.battleEnded));
+  battleTurn.textContent = roomState.battleEnded ? "Battle finished!" : `${turnName}'s turn`;
+  battleInstruction.textContent = roomState.battleEnded
+    ? "Kamehameha landed. The host can reset the battle."
+    : "Audience, choose the attack!";
+  kamehamehaLabel.textContent = roomState.kamehamehaUnlocked ? "Final attack ready" : "Locked by host";
 
   pads.forEach((pad) => {
-    pad.disabled = !enabled || coolingDown;
+    const isBattlePad = pad.classList.contains("battle-pad");
+    const isKamehameha = pad.dataset.sound === "kamehameha";
+    const correctMode = inBattle ? isBattlePad : !isBattlePad;
+    const finaleLocked = isKamehameha && !roomState.kamehamehaUnlocked;
+    pad.disabled = !enabled || !correctMode || coolingDown || finaleLocked || Boolean(roomState.battleEnded);
     pad.classList.toggle("cooling-down", coolingDown);
+    pad.classList.toggle("unlocked", isKamehameha && Boolean(roomState.kamehamehaUnlocked));
     pad.classList.toggle("playing", pad.dataset.sound === roomState.activeBackground);
     pad.setAttribute("aria-pressed", String(pad.dataset.sound === roomState.activeBackground));
   });
@@ -65,10 +90,14 @@ function updateControls() {
     message.textContent = "Waiting for the host sound system to come online…";
   } else if (roomState.locked) {
     message.textContent = "Web shooters disabled by the host.";
+  } else if (roomState.battleEnded) {
+    message.textContent = "Final attack complete. Battle over!";
   } else if (coolingDown) {
-    const seconds = Math.max(1, Math.round((roomState.cooldownDurationMs || 4000) / 1000));
-    const soundName = roomState.cooldownSound === "punch" ? "Punch" : "Soundboard";
-    message.textContent = `${soundName} recharging - all sounds unlock in ${seconds} second${seconds === 1 ? "" : "s"}.`;
+    const seconds = Math.max(1, Math.ceil(((roomState.cooldownUntil || 0) - Date.now()) / 1000));
+    const soundName = inBattle ? "Attack" : roomState.cooldownSound === "punch" ? "Punch" : "Soundboard";
+    message.textContent = `${soundName} recharging - ready in ${seconds} second${seconds === 1 ? "" : "s"}.`;
+  } else if (inBattle) {
+    message.textContent = `${turnName}'s turn. Choose Kick, Slap, or Punch${roomState.kamehamehaUnlocked ? " - Kamehameha is unlocked!" : "."}`;
   } else if (roomState.activeBackground) {
     const active = document.querySelector(`[data-sound="${roomState.activeBackground}"] span:nth-of-type(2)`)?.textContent;
     message.textContent = `${active || "Background track"} is playing. Tap it again to stop.`;
@@ -179,6 +208,8 @@ pads.forEach((button) => {
         scheduleCooldownEnd();
       }
       if (response?.reason === "locked") message.textContent = "Web shooters disabled by the host.";
+      if (response?.reason === "kamehameha-locked") message.textContent = "Kamehameha is still locked by the host.";
+      if (response?.reason === "battle-unavailable") message.textContent = "That battle action is no longer available.";
       if (response?.reason === "no-host") message.textContent = "Waiting for the host sound system…";
     });
   });
@@ -204,7 +235,9 @@ socket.on("room-state", (state) => {
 });
 
 socket.on("sound-accepted", (event) => {
-  const button = event.sound ? document.querySelector(`[data-sound="${event.sound}"]`) : null;
+  const button = event.sound
+    ? [...document.querySelectorAll(`[data-sound="${event.sound}"]`)].find((candidate) => !candidate.closest("[hidden]"))
+    : null;
   showReaction(event.reaction || "THWIP!", button);
 });
 

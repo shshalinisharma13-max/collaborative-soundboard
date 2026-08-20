@@ -261,6 +261,39 @@ h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.3rem); }
 .activity-log time { flex: 0 0 auto; color: var(--yellow); font: 700 .76rem/1.5 monospace; }
 .shooters-locked .pad-grid { opacity: .72; }
 
+.battle-panel[hidden], .pad-grid[hidden] { display: none; }
+.battle-panel { display: grid; gap: 16px; }
+.battle-banner, .battle-host-panel {
+  border: 4px solid var(--ink);
+  background: linear-gradient(135deg, #5d0b89, #142d68);
+  box-shadow: 7px 7px 0 var(--ink);
+}
+.battle-banner { padding: 20px; text-align: center; }
+.battle-banner h2 { color: var(--yellow); font-size: clamp(2rem, 7vw, 4rem); }
+.battle-banner p:last-child { margin: 9px 0 0; }
+.battle-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.finale-pad { background-color: #552275; }
+.finale-pad.unlocked {
+  background: radial-gradient(circle at 50% 50%, #fff 0 3%, #69d5ff 15%, #1554ca 48%, #341273 78%);
+  box-shadow: 0 0 24px rgba(105, 213, 255, .9), 6px 6px 0 var(--ink);
+}
+.battle-ended .battle-banner { background: linear-gradient(135deg, #14743f, #07162d); }
+.battle-host-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 22px;
+}
+.battle-host-copy p:last-child { margin-bottom: 0; color: #d6deed; }
+.battle-status { display: block; margin-top: 12px; color: var(--yellow); font-size: 1.05rem; }
+.battle-host-controls { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 10px; }
+.battle-host-controls .control-button { margin-top: 0; }
+.battle-start-button { background: var(--yellow); }
+.finale-control { background: #61d5ff; }
+.finale-control.unlocked { background: #b684ff; box-shadow: 0 0 18px rgba(182,132,255,.7), 4px 4px 0 var(--ink); }
+
 @keyframes burst {
   0% { opacity: 0; transform: scale(.3) rotate(-16deg); }
   24% { opacity: 1; transform: scale(1.15) rotate(5deg); }
@@ -276,6 +309,7 @@ h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.3rem); }
   .app { padding-top: 30px; }
   .pad-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .room-row, .host-dashboard { grid-template-columns: 1fr; }
+  .battle-host-panel, .battle-host-controls { grid-template-columns: 1fr; }
   .pad { min-height: 142px; padding: 15px; }
 }
 @media (max-width: 390px) {
